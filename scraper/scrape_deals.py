@@ -1,1 +1,0 @@
-"""Scraper module for extracting deal data from various sources."""

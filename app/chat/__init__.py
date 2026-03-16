@@ -1,0 +1,1 @@
+"""Chat module for deal search and retrieval-augmented generation."""

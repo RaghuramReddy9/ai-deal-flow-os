@@ -1,10 +1,42 @@
 # Database initialization
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from .models import Base
+import sqlite3
+from pathlib import Path
 
-engine = create_engine('sqlite:///data/ai_deals.db')
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+DB_PATH = Path("data/processed/ai_deals.db")
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
+
+def get_connection() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    return sqlite3.connect(DB_PATH)
+
+
+def create_deals_table() -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS deals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deal_name TEXT NOT NULL,
+            industry TEXT,
+            location TEXT,
+            asking_price TEXT,
+            revenue TEXT,
+            ebitda TEXT,
+            description TEXT,
+            source_url TEXT UNIQUE,
+            source_name TEXT,
+            stage TEXT DEFAULT 'New',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    conn.commit()
+    conn.close()
+
+
+if __name__ == "__main__":
+    create_deals_table()
+    print(f"Database initialized at: {DB_PATH}")

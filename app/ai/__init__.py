@@ -1,0 +1,1 @@
+"""AI enrichment module for deal analysis and scoring."""

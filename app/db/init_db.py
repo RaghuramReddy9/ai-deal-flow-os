@@ -1,13 +1,13 @@
-# Database initialization
 import sqlite3
-from pathlib import Path
 
-DB_PATH = Path("data/processed/ai_deals.db")
+from .constants import DB_PATH
 
 
 def get_connection() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    return sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def create_deals_table() -> None:
@@ -37,6 +37,62 @@ def create_deals_table() -> None:
     conn.close()
 
 
-if __name__ == "__main__":
+def get_existing_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    cursor = conn.cursor()
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    rows = cursor.fetchall()
+    return {row["name"] for row in rows}
+
+
+def add_missing_columns() -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    existing = get_existing_columns(conn, "deals")
+
+    columns_to_add = {
+        # parsed numeric fields for scoring
+        "asking_price_value": "REAL",
+        "revenue_value": "REAL",
+        "ebitda_value": "REAL",
+
+        # enrichment fields
+        "normalized_industry": "TEXT",
+        "ai_summary": "TEXT",
+        "ai_risks": "TEXT",  # JSON string
+        "recurring_revenue_signal": "INTEGER",
+        "growth_potential": "INTEGER",
+        "ai_score": "INTEGER",
+        "deterministic_score": "INTEGER",
+        "final_score": "INTEGER",
+        "score_reason": "TEXT",
+        "investment_label": "TEXT",
+
+        # workflow/status fields
+        "enrichment_status": "TEXT DEFAULT 'pending'",
+        "enrichment_error": "TEXT",
+        "enriched_at": "TIMESTAMP",
+        "llm_raw_json": "TEXT",
+
+        # future notion sync
+        "notion_sync_status": "TEXT DEFAULT 'pending'",
+        "notion_page_id": "TEXT",
+        "notion_last_synced_at": "TIMESTAMP",
+    }
+
+    for column_name, column_type in columns_to_add.items():
+        if column_name not in existing:
+            cursor.execute(f"ALTER TABLE deals ADD COLUMN {column_name} {column_type}")
+
+    conn.commit()
+    conn.close()
+
+
+def init_database() -> None:
     create_deals_table()
-    print(f"Database initialized at: {DB_PATH}")
+    add_missing_columns()
+
+
+if __name__ == "__main__":
+    init_database()
+    print(f"Database initialized and migrated at: {DB_PATH}")

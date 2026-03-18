@@ -1,0 +1,160 @@
+{
+  "name": "Deal Flow OS - Manual Pipeline Run",
+  "nodes": [
+    {
+      "parameters": {
+        "command": "cd /d C:\\RRR\\projects\\gen-ai-engineer-portfolio\\ai-deal-flow-os && C:\\RRR\\projects\\gen-ai-engineer-portfolio\\ai-deal-flow-os\\.venv\\Scripts\\python.exe -m app.run_pipeline --scrape-limit 15 --enrich-limit 15 --sync-limit 15"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        96,
+        -144
+      ],
+      "id": "cc373b99-f72a-463f-b511-ca400a8cdc67",
+      "name": "Run Deal Pipeline",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        -240
+      ],
+      "id": "af81e124-367c-4342-afc2-fb172f91a0a6",
+      "name": "Manual Run"
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\n\nconst stdout = row.stdout || \"\";\nconst stderr = row.stderr || \"\";\nconst exitCode = row.exitCode ?? null;\n\nfunction matchOne(pattern, text) {\n  const m = text.match(pattern);\n  return m ? m[1] : null;\n}\n\nfunction countMatches(pattern, text) {\n  const matches = text.match(pattern);\n  return matches ? matches.length : 0;\n}\n\nconst insertedDeals = matchOne(/Inserted new deals:\\s*(\\d+)/, stdout);\nconst skippedDeals = matchOne(/Skipped existing deals:\\s*(\\d+)/, stdout);\nconst dealsToEnrich = matchOne(/Found\\s+(\\d+)\\s+deals to enrich/, stdout);\nconst dealsToSync = matchOne(/Found\\s+(\\d+)\\s+deal\\(s\\) to sync\\./, stdout);\nconst syncedDeals = countMatches(/\\[SYNCED\\]/g, stdout);\nconst failedDeals = countMatches(/\\[FAILED\\]/g, stdout);\nconst syncedNone = /No eligible deals ready for Notion sync\\./.test(stdout);\nconst pipelineComplete = /PIPELINE COMPLETE/.test(stdout);\n\nconst failed = exitCode !== 0 || !!stderr;\n\nreturn [\n  {\n    json: {\n      status: failed ? \"failed\" : \"success\",\n      exitCode,\n      insertedDeals: insertedDeals ? Number(insertedDeals) : null,\n      skippedDeals: skippedDeals ? Number(skippedDeals) : null,\n      dealsToEnrich: dealsToEnrich ? Number(dealsToEnrich) : null,\n      dealsToSync: dealsToSync ? Number(dealsToSync) : 0,\n      syncedDeals,\n      failedDeals,\n      notionResult: syncedNone ? \"No eligible deals for Notion sync\" : `Synced ${syncedDeals} deal(s), failed ${failedDeals}`,\n      pipelineComplete,\n      shortSummary: failed\n        ? `Pipeline failed. Synced ${syncedDeals} deal(s), failed ${failedDeals}. Check stderr/raw logs.`\n        : `Pipeline succeeded. Inserted ${insertedDeals ?? 0} new deals, skipped ${skippedDeals ?? 0}, enriched ${dealsToEnrich ?? 0}, synced ${syncedDeals}, failed ${failedDeals}.`,\n      rawStdout: stdout,\n      rawStderr: stderr,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        -144
+      ],
+      "id": "e8e3a87a-7fbe-4d02-aea2-baaed3de7416",
+      "name": "Format Run Summary"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -112,
+        -48
+      ],
+      "id": "7d246799-77d5-4e53-a097-c9ccff435736",
+      "name": "Scheduled Run"
+    },
+    {
+      "parameters": {
+        "path": "run-deal-pipeline",
+        "responseMode": "streaming",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -272,
+        -144
+      ],
+      "id": "add3f49b-e0c8-4339-a1da-65168bb96fd4",
+      "name": "Webhook Trigger",
+      "webhookId": "93c0c564-8b7e-4a1b-aa27-8fd86abed86c"
+    },
+    {
+      "parameters": {
+        "content": "Triggers: manual / scheduled / external webhook\n\nPipeline: scrape → enrich → score → sync\n\nOutput: structured success/failure summary"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        -160
+      ],
+      "id": "254be71c-c025-4e02-a8b5-039de3799c96",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Run": {
+      "main": [
+        [
+          {
+            "node": "Run Deal Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Deal Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Format Run Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Run Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scheduled Run": {
+      "main": [
+        [
+          {
+            "node": "Run Deal Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Deal Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "5e03d787-51c9-4d35-a8a6-70ea5da358be",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1ddea5e3937db8a7c99c3d10f63224e6380dc883391020d951d5b835c77660b8"
+  },
+  "id": "hT2vW7T4b9wZueJS",
+  "tags": []
+}

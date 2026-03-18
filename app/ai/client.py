@@ -1,15 +1,31 @@
-import json
+import os
+from openai import OpenAI
 
 
-class FakeLLMClient:
-    def generate(self, prompt: str) -> str:
-        mock_response = {
-            "summary": "This appears to be a small business listing with limited but usable acquisition data. It may warrant review if the economics and recurring revenue profile hold up under diligence.",
-            "industry": "Ecommerce",
-            "recurring_revenue_signal": False,
-            "risk_flags": ["limited financial detail", "unclear customer concentration"],
-            "growth_potential": 3,
-            "overall_score": 68,
-            "score_reason": "Moderate opportunity with incomplete diligence data.",
+class OpenRouterClient:
+    def __init__(self) -> None:
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY is not set in environment.")
+
+        self.model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+        )
+
+        # Optional but useful for OpenRouter rankings/analytics
+        self.extra_headers = {
+            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "http://localhost:8000"),
+            "X-Title": os.getenv("OPENROUTER_APP_NAME", "AI Deal Flow OS"),
         }
-        return json.dumps(mock_response)
+
+    def generate(self, prompt: str) -> str:
+        response = self.client.responses.create(
+            model=self.model,
+            input=prompt,
+            temperature=0.2,
+            extra_headers=self.extra_headers,
+        )
+        return response.output_text

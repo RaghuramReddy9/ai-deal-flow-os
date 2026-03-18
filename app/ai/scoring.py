@@ -19,6 +19,14 @@ def compute_deterministic_score(deal: dict, ai_output: dict) -> dict:
     asking_price = deal.get("asking_price_value")
     description = deal.get("description") or ""
 
+    if revenue and revenue < 1000:
+        score -= 10
+        reasons.append("Revenue appears malformed or too small")
+
+    if revenue and ebitda and ebitda > revenue:
+        score -= 15
+        reasons.append("Suspicious financial relationship: EBITDA exceeds revenue")
+
     if ebitda:
         score += 15
         reasons.append("EBITDA available")

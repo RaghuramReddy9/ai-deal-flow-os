@@ -1,4 +1,3 @@
-import json
 import re
 from typing import List
 from urllib.parse import urljoin
@@ -12,7 +11,7 @@ from app.scraper.broker_scraper import DealListing
 FLIPPA_SEARCH_URL = "https://flippa.com/search"
 
 
-def fetch_search_page() -> tuple[str, dict]:
+def fetch_search_page(page_number: int = 1) -> tuple[str, dict]:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
@@ -26,7 +25,11 @@ def fetch_search_page() -> tuple[str, dict]:
                 locale="en-US",
             )
 
-            page.goto(FLIPPA_SEARCH_URL, wait_until="domcontentloaded", timeout=60000)
+            search_url = FLIPPA_SEARCH_URL
+            if page_number > 1:
+                search_url = f"{FLIPPA_SEARCH_URL}?page={page_number}"
+
+            page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(6000)
 
             html = page.content()
@@ -171,19 +174,28 @@ def _extract_money_near_label(soup: BeautifulSoup, labels: list[str]) -> str | N
     for i, line in enumerate(lines):
         low = line.lower()
 
+        # Skip lines with percentages as they're likely not revenue/profit
+        if "%" in low:
+            continue
+
         for label in labels:
             if re.search(r'\b' + re.escape(label) + r'\b', low):
-                # check same line - improved regex for various money formats
-                money = re.search(r'\$?\s*[\d,]+(?:\.\d+)?\s*[kKmMbBtT]?', line)
+                # check same line - comprehensive regex for money formats
+                money = re.search(r'\$?\s*[\d,]+(?:\.\d+)?\s*(?:k|K|m|M|b|B|t|T|million|billion)?\b', line)
                 if money:
-                    return money.group(0).strip()
+                    result = money.group(0).strip()
+                    return result
 
                 # check next lines
                 for j in range(i + 1, min(i + 3, len(lines))):
                     candidate = lines[j]
-                    money = re.search(r'\$?\s*[\d,]+(?:\.\d+)?\s*[kKmMbBtT]?', candidate)
+                    # Skip percentage lines
+                    if "%" in candidate.lower():
+                        continue
+                    money = re.search(r'\$?\s*[\d,]+(?:\.\d+)?\s*(?:k|K|m|M|b|B|t|T|million|billion)?\b', candidate)
                     if money:
-                        return money.group(0).strip()
+                        result = money.group(0).strip()
+                        return result
 
     return None
 

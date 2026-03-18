@@ -76,6 +76,7 @@ def add_missing_columns() -> None:
 
         # future notion sync
         "notion_sync_status": "TEXT DEFAULT 'pending'",
+        "notion_sync_error": "TEXT",
         "notion_page_id": "TEXT",
         "notion_last_synced_at": "TIMESTAMP",
     }
